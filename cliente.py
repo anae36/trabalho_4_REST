@@ -63,8 +63,14 @@ def consumir_leilao_especifico(id_leilao):
     connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
     channel = connection.channel()
     
-    nome_fila_leilao = f"leilao_{id_leilao}"
-    channel.queue_declare(queue=nome_fila_leilao, durable=True)
+    #exchange topic 
+    channel.exchange_declare(exchange='notificacoes_exchange', exchange_type='topic')
+    result = channel.queue_declare(queue='', exclusive=True)
+    queue_name_exclusiva = result.method.queue
+    channel.queue_bind(
+        exchange='notificacoes_exchange',
+        queue=queue_name_exclusiva,
+        routing_key=f"*.leilao.{id_leilao}"    )    
     
     def callback_leilao(ch, method, properties, body):
         dados_leilao = json.loads(body.decode('utf-8'))
@@ -72,10 +78,11 @@ def consumir_leilao_especifico(id_leilao):
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     channel.basic_consume(
-        queue=nome_fila_leilao,
+        queue=queue_name_exclusiva,
         on_message_callback=callback_leilao,
         auto_ack=False
     )
+
     print(f"[*] Inscrito para receber notificações do leilão {id_leilao}.")
     channel.start_consuming()
 connection_pub = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))

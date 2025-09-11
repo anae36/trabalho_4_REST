@@ -12,17 +12,18 @@ channel.queue_bind(exchange='lance_validado_exchange', queue='lance_validado', r
 channel.exchange_declare(exchange='leilao_vencedor_exchange', exchange_type= 'direct')
 queue=channel.queue_declare(queue='leilao_vencedor',durable=True)
 channel.queue_bind(exchange='leilao_vencedor_exchange', queue='leilao_vencedor', routing_key = 'vencedor')
+#exchange topic para filas específicas
+channel.exchange_declare(exchange='notificacoes_exchange', exchange_type='topic')
 
 def callback_lance_validado(ch, method, properties, body): 
     lance_decodificado = json.loads(body.decode('utf-8'))
     id_leilao = lance_decodificado.get('id_leilao')
     
-    nome_fila_leilao = f"leilao_{id_leilao}"
-    channel.queue_declare(queue=nome_fila_leilao, durable=True)
     channel.basic_publish(
-            exchange='',
-            routing_key=nome_fila_leilao,
-            body=body 
+            exchange='notificacoes_exchange',
+            routing_key=f"validado.leilao.{id_leilao}",
+            body=body ,
+            mandatory=True
         )
     
     print(f"[INFO]Lance publicado na fila leilao{id_leilao}")
@@ -32,12 +33,11 @@ def callback_leilao_vencedor(ch, method, properties, body):
     vencedor_decodificado = json.loads(body.decode('utf-8'))
     id_leilao = vencedor_decodificado.get('id_leilao')
     
-    nome_fila_leilao = f"leilao_{id_leilao}"
-    channel.queue_declare(queue=nome_fila_leilao, durable=True)
     channel.basic_publish(
-            exchange='',
-            routing_key=nome_fila_leilao,
-            body=body
+            exchange='notificacoes_exchange',
+            routing_key=f"vencedor.leilao.{id_leilao}",
+            body=body,
+            mandatory=True
         )
     
     print(f"[INFO]Vencedor publicado na fila leilao{id_leilao}")

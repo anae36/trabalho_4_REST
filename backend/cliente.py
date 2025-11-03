@@ -5,38 +5,6 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 
 id_usuario = input("Digite seu id: ")
-diretorio_public_keys = "C:/Users/Aninha/Documents/sd/public_key"
-diretorio_private_keys = "C:/Users/Aninha/Documents/sd/private_key"
-private_key_path = os.path.join(diretorio_private_keys, f"{id_usuario}_private.pem")
-public_key_path = os.path.join(diretorio_public_keys, f"{id_usuario}.pem")
-
-
-if not os.path.exists(private_key_path):
-    print("Gerando novas chaves RSA...")
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_key = private_key.public_key()
-
-    pem_private_key = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
-    )
-    with open(private_key_path, "wb") as f:
-        f.write(pem_private_key)
-
-    pem_public_key = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    )
-    with open(public_key_path, "wb") as f:
-        f.write(pem_public_key)
-
-
-with open(private_key_path, "rb") as key_file:
-    private_key = serialization.load_pem_private_key(
-        key_file.read(),
-        password=None,
-    )
 
 def consumir_inicio_leilao():    
     connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
@@ -98,13 +66,8 @@ def realiza_lances(id_leilao, id_usuario_lance, valor):
         "valor": float(valor)
     }
    
-    lance_json = json.dumps(lance,sort_keys=True)
-    lance_bytes = lance_json.encode('utf-8')
-    assinatura = private_key.sign(lance_bytes, padding.PKCS1v15(), hashes.SHA256())
-    assinatura_b64 = base64.b64encode(assinatura).decode('utf-8')
     mensagem_para_enviar = {
-        'dados': lance,
-        'assinatura': assinatura_b64
+        'dados': lance
     }
     mensagem_final_json = json.dumps(mensagem_para_enviar)
     

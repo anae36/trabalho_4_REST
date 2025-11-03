@@ -1,32 +1,13 @@
 import pika
 import json
-import base64
-import os
 import traceback
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.exceptions import InvalidSignature
 
-diretorio_public_keys = "C:/Users/Aninha/Documents/sd/public_key"
-chaves_publicas = {}
+
 leiloes_ativos = {}
-
-def carregar_chaves_publicas():
-    print("Carregando chaves públicas...")
-    for filename in os.listdir(diretorio_public_keys):
-        if filename.endswith(".pem"):
-            id_cliente = filename.split('.')[0]
-            filepath = os.path.join(diretorio_public_keys, filename)
-            with open(filepath, "rb") as key_file:
-                public_key = serialization.load_pem_public_key(key_file.read())
-                chaves_publicas[id_cliente] = public_key
-                print(f"  - Chave de '{id_cliente}' carregada.")
-    print("Carregamento de chaves concluído.")
-
 connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
 channel = connection.channel()
 
-carregar_chaves_publicas()
+
 
 #escuta das filas leilao iniciado, leilao finalizado e lance realizado
 channel.exchange_declare(exchange='leilao_inicio_exchange', exchange_type='fanout')
@@ -158,25 +139,11 @@ def callback_lance(ch, method, properties, body):
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
         #se o usuario é desconhecido 
-        if id_usuario is None or id_usuario not in chaves_publicas:
+        if id_usuario is None:
             print(f"[FALHA] Lance de usuário desconhecido '{id_usuario}'. Descartado.")
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
-
-        dados_json = json.dumps(dados_lance, sort_keys=True)
-        dados_bytes = dados_json.encode('utf-8')
-
-        assinatura_b64 = mensagem_completa.get('assinatura')
-        #se a mensagem esta sem assinatura
-        if not assinatura_b64:
-            print("[ERRO] Mensagem sem assinatura:", mensagem_completa)
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-            return
-
-        assinatura_bytes = base64.b64decode(assinatura_b64)
-        chave_publica = chaves_publicas[id_usuario]    
-        chave_publica.verify(assinatura_bytes, dados_bytes, padding.PKCS1v15(), hashes.SHA256())
-
+        
         valor_lance = float(dados_lance.get('valor', 0))
         #verifica se o lance é maior que o anterior 
         if valor_lance > leilao['maior_lance']:
@@ -188,10 +155,7 @@ def callback_lance(ch, method, properties, body):
             print(f"[FALHA] Lance de R${valor_lance} de {id_usuario} é MENOR ou IGUAL ao lance atual (R${leilao['maior_lance']}).")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
-    #verifica se a assinatura é valida 
-    except InvalidSignature:
-        print(f"[FALHA] ASSINATURA INVÁLIDA para o usuário {id_usuario}! Lance descartado.")
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+    
     except Exception as e:
         print(f"[ERRO] Erro inesperado no processamento do lance: {e}")
         traceback.print_exc()
@@ -204,4 +168,5 @@ channel.basic_consume(queue='leilao_finalizado', on_message_callback=callback_le
 
 print('[*] Microsserviço de Lances aguardando mensagens. Para sair pressione CTRL+C')
 channel.start_consuming()
+ 
  

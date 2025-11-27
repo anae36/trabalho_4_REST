@@ -4,7 +4,7 @@ from flask_cors import CORS
 
 # --- Configuração do Flask ---
 app = Flask(__name__)
-CORS(app) # << HABILITAR CORS PARA TODAS AS ROTAS (Necessário para 8000 -> 5003)
+CORS(app)
 # Rodaremos o MS Pagamento na porta 5003
 PORT = 5003
 
@@ -179,3 +179,4 @@ if __name__ == '__main__':
     # 2. Inicia o servidor Flask
     print(f"[MS Pagamento] Servidor Flask iniciado na porta {PORT}.")
     app.run(port=PORT, debug=False, threaded=True)
+

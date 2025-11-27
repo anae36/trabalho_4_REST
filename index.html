@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Leilão (Frontend Limpo)</title>
+    </head>
+<body>
+    <div class="container">
+        <h1>Painel de Teste - Leilões</h1>
+        
+        <div class="box">
+            <h2>1. Conexão</h2>
+            <input type="text" id="clienteId" placeholder="ID (ex: 'ana')">
+            <button id="btnConectar">Conectar</button>
+        </div>
+        <div class="box">
+            <h2>2. Criar Leilão</h2>
+            <input type="text" id="leilaoProduto" placeholder="Produto">
+            <input type="datetime-local" id="leilaoInicio">
+            <input type="datetime-local" id="leilaoFim">
+            <button id="btnCriarLeilao">Criar</button>
+            
+        </div>
+        <div class="box">
+            <h2>3. Leilões Ativos</h2>
+            <button id="btnConsultar">Consultar Leilões Ativos</button>
+            <div id="leiloesAtivos" style="margin-top: 10px; background: #f0f0f0; padding: 10px;">
+                Nenhum leilão consultado.
+            </div>
+        </div>
+        <div class="box">
+            <h2>4. Interagir</h2>
+            <input type="number" id="leilaoIdInteracao" placeholder="ID do Leilão">
+            <input type="number" id="lanceValor" placeholder="Valor do Lance">
+            <button id="btnDarLance">Dar Lance</button>
+            <button id="btnRegistrar">Registrar Interesse</button>
+            <button id="btnCancelar">Cancelar Interesse</button>
+        </div>
+        <div class="box">
+            <h2>Log de Notificações</h2>
+            <div id="notificacoes"><p>Aguardando...</p></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    
+    <script src="api.js" type="module"></script>
+    <script src="main.js" type="module"></script>
+
+</body>
+</html>

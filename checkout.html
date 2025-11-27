@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Checkout de Pagamento Simulado</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
+        .container { background-color: #fff; padding: 30px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        h1 { color: #333; text-align: center; }
+        .info { margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { 
+            width: 100%; padding: 10px; background-color: #28a745; color: white; 
+            border: none; border-radius: 4px; cursor: pointer; font-size: 16px; 
+            margin-top: 10px;
+        }
+        button:hover { background-color: #218838; }
+        .status-message { text-align: center; margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Simulação de Pagamento</h1>
+        <p>Esta página simula a tela final de pagamento do sistema externo.</p>
+
+        <div class="info">
+            <strong>Leilão ID:</strong> <span id="leilaoId">...</span><br>
+            <strong>Comprador ID:</strong> <span id="clienteId">...</span><br>
+            <strong>Valor:</strong> <span id="valor">...</span>
+        </div>
+
+        <button id="btnAprovar">APROVAR PAGAMENTO (Simular sucesso)</button>
+        <button id="btnRecusar" style="background-color: #dc3545;">RECUSAR PAGAMENTO (Simular falha)</button>
+
+        <div class="status-message" id="message">Aguardando ação...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        const MS_PAGAMENTO_URL = 'http://localhost:5003';
+
+        // --- 1. Extrair Dados da URL ---
+        // Ex: checkout.html?leilaoId=1&clienteId=ana&valor=30.0
+        const urlParams = new URLSearchParams(window.location.search);
+        const leilaoId = urlParams.get('leilaoId');
+        const clienteId = urlParams.get('clienteId');
+        const valor = urlParams.get('valor');
+
+        // Atualiza a interface
+        document.getElementById('leilaoId').textContent = leilaoId || 'N/A';
+        document.getElementById('clienteId').textContent = clienteId || 'N/A';
+        document.getElementById('valor').textContent = `R$ ${valor || 'N/A'}`;
+
+        // --- 2. Função para Enviar o Webhook ---
+        async function enviarWebhook(status) {
+            if (!leilaoId || !clienteId) {
+                document.getElementById('message').textContent = 'Erro: Faltam IDs na URL.';
+                return;
+            }
+
+            const dadosWebhook = {
+                id_leilao: parseInt(leilaoId),
+                id_usuario: clienteId,
+                status: status, // "APROVADA" ou "RECUSADA"
+                valor: parseFloat(valor) 
+            };
+            
+            document.getElementById('message').textContent = `Enviando status: ${status}...`;
+
+            try {
+                // Envia o Webhook (POST) para o endpoint configurado no seu MS Pagamento
+                const response = await axios.post(`${MS_PAGAMENTO_URL}/webhook_status`, dadosWebhook);
+                
+                console.log("Webhook Enviado com sucesso:", response.data);
+                document.getElementById('message').textContent = `Status enviado com sucesso! Status: ${status}.`;
+                
+                // Desabilita botões após o envio
+                document.getElementById('btnAprovar').disabled = true;
+                document.getElementById('btnRecusar').disabled = true;
+
+            } catch (error) {
+                console.error("Erro ao enviar Webhook:", error);
+                document.getElementById('message').textContent = `Erro ao enviar status. Verifique o console do MS Pagamento (5003).`;
+            }
+        }
+
+        // --- 3. Atribuir Eventos aos Botões ---
+        document.getElementById('btnAprovar').onclick = () => enviarWebhook('APROVADA');
+        document.getElementById('btnRecusar').onclick = () => enviarWebhook('RECUSADA');
+    </script>
+</body>
+</html>

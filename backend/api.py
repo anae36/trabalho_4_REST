@@ -5,7 +5,6 @@ from flask_sse import sse
 
 # python -m http.server 8000
 
-# --- Configuração do Flask ---
 app = Flask(__name__)
 CORS(app)
 
@@ -13,38 +12,26 @@ CORS(app)
 app.config["REDIS_URL"] = "redis://localhost:6379" 
 app.register_blueprint(sse, url_prefix='/stream')
 
-# --- URLs dos Microsserviços ---
+# URLs dos Microsserviços
 MS_LEILAO_URL = "http://localhost:5001"
 MS_LANCE_URL = "http://localhost:5002"
 
-# --- Gerenciamento de Estado Interno do Gateway ---
-
-# 1. Dicionário de "Interesses":
-#    Guarda quais clientes estão ouvindo quais leilões.
-#    Formato: {"id_leilao": {set_de_clientes}}
+# Guarda quais clientes estão ouvindo quais leilões. {"id_leilao": {set_de_clientes}}
 interesses = {}
 
-# O Flask-SSE/Redis gerencia as conexões e o envio.
-
-# Mutex para proteger o acesso concorrente ao dicionário de interesses
 lock = threading.Lock()
-
-# --- 1. Endpoints REST (Proxy para Microsserviços) ---
 
 @app.route('/leiloes', methods=['POST'])
 def criar_leilao():
-    """ Repassa a criação de leilão para o MS Leilão """
     try:
-        # Repassa o JSON recebido diretamente
         response = requests.post(f"{MS_LEILAO_URL}/leiloes", json=request.json)
-        # Retorna a resposta do microsserviço (corpo e status)
+        # Retorna a resposta do microsserviço
         return response.content, response.status_code
     except requests.exceptions.ConnectionError:
         return jsonify({"erro": "MS Leilão está offline"}), 503
 
 @app.route('/leiloes', methods=['GET'])
 def consultar_leiloes():
-    """ Repassa a consulta de leilões para o MS Leilão """
     try:
         response = requests.get(f"{MS_LEILAO_URL}/leiloes")
         return response.content, response.status_code
@@ -53,7 +40,6 @@ def consultar_leiloes():
 
 @app.route('/lances', methods=['POST'])
 def efetuar_lance():
-    """ Repassa o lance para o MS Lance """
     try:
         dados = request.json
         if 'id_usuario' not in dados:
@@ -64,11 +50,8 @@ def efetuar_lance():
     except requests.exceptions.ConnectionError:
         return jsonify({"erro": "MS Lance está offline"}), 503
 
-# --- 2. Endpoints REST (Gerenciamento de Interesse) ---
-
 @app.route('/notificacoes/<id_leilao>', methods=['POST'])
 def registrar_interesse(id_leilao):
-    """ O cliente (frontend) registra interesse em um leilão """
     dados = request.json
     cliente_id = str(dados.get('id_usuario'))
     if not cliente_id:
@@ -85,7 +68,6 @@ def registrar_interesse(id_leilao):
 
 @app.route('/notificacoes/<id_leilao>', methods=['DELETE'])
 def cancelar_interesse(id_leilao):
-    """ O cliente (frontend) cancela o interesse em um leilão """
     dados = request.json
     cliente_id = str(dados.get('id_usuario'))
     if not cliente_id:
@@ -100,11 +82,9 @@ def cancelar_interesse(id_leilao):
     print(f"[Gateway] Cliente '{cliente_id}' cancelou interesse no leilão '{id_leilao}'.")
     return jsonify({"status": "cancelado", "leilao": id_leilao, "cliente": cliente_id}), 200
 
-# --- 3. Funções Auxiliares de Notificação (com sse.publish) ---
-
 def notificar_clientes_interessados(id_leilao, evento_nome, payload):
     with lock:
-        # IMPORTANTE: Cria o contexto da aplicação para acessar o Redis
+        # Cria o contexto da aplicação para acessar o Redis
         with app.app_context():
             if id_leilao in interesses:
                 lista_clientes = interesses[id_leilao]
@@ -118,10 +98,9 @@ def notificar_clientes_interessados(id_leilao, evento_nome, payload):
             else:
                 print(f"[Gateway Notification] Ninguém interessado no leilão {id_leilao} para evento {evento_nome}.")
 
-
 def notificar_cliente_direto(cliente_id, evento_nome, payload):
     with lock:
-        # IMPORTANTE: Cria o contexto da aplicação para acessar o Redis
+        # Cria o contexto da aplicação para acessar o Redis
         with app.app_context():
             print(f"[Gateway Notification] Notificando direto: {cliente_id} - Evento: {evento_nome}")
             try:
@@ -129,16 +108,12 @@ def notificar_cliente_direto(cliente_id, evento_nome, payload):
             except Exception as e:
                 print(f"[ERRO SSE] Falha direta para {cliente_id}: {e}")
 
-# --- 4. Consumidor RabbitMQ (em Thread separada) ---
-
 def iniciar_consumidor_rabbitmq():
     """ Roda em uma thread para ouvir o RabbitMQ """
     print("[Gateway] Iniciando consumidor RabbitMQ em thread separada...")
     
     connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
     channel = connection.channel()
-
-    # --- Declaração das filas que o Gateway vai OUVIR ---
     
     # Evento: lance_validado
     channel.exchange_declare(exchange='lance_validado_exchange', exchange_type='direct')
@@ -165,13 +140,10 @@ def iniciar_consumidor_rabbitmq():
     q_status = channel.queue_declare(queue='', exclusive=True)
     channel.queue_bind(exchange='status_pagamento_exchange', queue=q_status.method.queue, routing_key='status_pagamento')
     
-    # --- Callbacks do Consumidor ---
-    
     def callback_lance_validado(ch, method, properties, body):
         dados = json.loads(body.decode('utf-8'))
         id_leilao = str(dados.get('id_leilao'))
         
-        # Print de Debug
         print(f"[Gateway RabbitMQ] >>> RECEBIDO 'lance_validado' do Leilão {id_leilao}. Acionando SSE...", flush=True)
         
         notificar_clientes_interessados(id_leilao, "novo_lance", dados)
@@ -189,8 +161,7 @@ def iniciar_consumidor_rabbitmq():
         dados = json.loads(body.decode('utf-8'))
         id_leilao = str(dados.get('id_leilao'))
         print(f"[Gateway RabbitMQ] Recebido: 'leilao_vencedor' para leilão {id_leilao}")
-        
-        # Notifica TODOS os interessados sobre o vencedor usando sse.publish()
+        # Notifica TODOS os interessados usando sse.publish()
         notificar_clientes_interessados(id_leilao, "leilao_vencedor", dados)
         
         ch.basic_ack(delivery_tag=method.delivery_tag)
@@ -211,7 +182,7 @@ def iniciar_consumidor_rabbitmq():
         notificar_cliente_direto(cliente_id, "status_pagamento", dados) 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    # --- Inicia os consumidores ---
+    # Inicia os consumidores
     channel.basic_consume(queue=q_lance_valido.method.queue, on_message_callback=callback_lance_validado)
     channel.basic_consume(queue=q_lance_invalido.method.queue, on_message_callback=callback_lance_invalidado)
     channel.basic_consume(queue=q_vencedor.method.queue, on_message_callback=callback_leilao_vencedor)
@@ -225,14 +196,9 @@ def iniciar_consumidor_rabbitmq():
     finally:
         connection.close()
 
-# --- Inicialização ---
 if __name__ == '__main__':
-    # 1. Inicia o consumidor RabbitMQ em uma thread daemon
     thread_rabbitmq = threading.Thread(target=iniciar_consumidor_rabbitmq, daemon=True)
     thread_rabbitmq.start()
     
-    # 2. Inicia o servidor Flask (porta 3000)
-    #    'threaded=True' é crucial para o Flask gerenciar múltiplas
-    #    conexões SSE e REST simultaneamente.
     print("[Gateway] Servidor Flask iniciado na porta 3000.")
     app.run(host='0.0.0.0', port=3000, debug=False, threaded=True)

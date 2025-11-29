@@ -1,50 +1,37 @@
 import pika, json, threading, time
 from flask import Flask, request, jsonify
 
-# --- Configuração do Flask ---
 app = Flask(__name__)
 
-# Memória de lances (O MS Lance é o "dono" desses dados)
-leiloes_ativos = {} # Formato: {"id_leilao": {"maior_lance": 0, "lances": []}}
+leiloes_ativos = {} # {"id_leilao": {"maior_lance": 0, "lances": []}}
 
-# --- Lógica de Negócio (Endpoint REST) ---
 @app.route('/lances', methods=['POST'])
 def receber_lance():
-    """
-    Recebe um novo lance do API Gateway.
-    Valida e publica o resultado no RabbitMQ.
-    """
     dados = request.json
     id_leilao = str(dados.get('id_leilao'))
     id_usuario = str(dados.get('id_usuario'))
     valor_lance = float(dados.get('valor', 0))
 
-    # Conexão RabbitMQ para Publicação
-    # (Em um app real, você reusaria a conexão, mas para simplicidade, abrimos uma)
     connection_pub = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
     channel_pub = connection_pub.channel()
 
     try:
         leilao = leiloes_ativos.get(id_leilao)
         
-        # 1. Leilão não está ativo?
         if not leilao:
             print(f"[MS Lance] Lance REPROVADO (Leilão {id_leilao} não está ativo).")
             publicar_lance_invalidado(channel_pub, dados, "leilao_inativo")
             return jsonify({"status": "erro", "motivo": "leilao_inativo"}), 400
 
-        # 2. Lance é menor ou igual?
         if valor_lance <= leilao['maior_lance']:
             print(f"[MS Lance] Lance REPROVADO (Valor R${valor_lance} é menor ou igual a R${leilao['maior_lance']}).")
             publicar_lance_invalidado(channel_pub, dados, "valor_baixo")
             return jsonify({"status": "erro", "motivo": "valor_baixo"}), 400
             
-        # 3. Lance VÁLIDO
         print(f"[MS Lance] Lance APROVADO (R${valor_lance} de {id_usuario} no leilão {id_leilao}).")
         leilao['maior_lance'] = valor_lance
         leilao['lances'].append(dados)
         
-        # Publica no RabbitMQ
         channel_pub.exchange_declare(exchange='lance_validado_exchange', exchange_type='direct')
         channel_pub.basic_publish(
             exchange='lance_validado_exchange',
@@ -58,14 +45,11 @@ def receber_lance():
         connection_pub.close()
 
 def publicar_lance_invalidado(channel, dados_lance, motivo):
-    """
-    Helper para publicar o evento de lance inválido (novo requisito).
-    """
     channel.exchange_declare(exchange='lance_invalidado_exchange', exchange_type='direct')
     mensagem = {
         "lance": dados_lance,
         "motivo": motivo,
-        "id_usuario": dados_lance.get('id_usuario') # Chave para o Gateway notificar
+        "id_usuario": dados_lance.get('id_usuario')
     }
     channel.basic_publish(
         exchange='lance_invalidado_exchange',
@@ -73,11 +57,7 @@ def publicar_lance_invalidado(channel, dados_lance, motivo):
         body=json.dumps(mensagem)
     )
 
-# --- Lógica do RabbitMQ ---
 def iniciar_consumidor_rabbitmq():
-    """
-    Roda em uma thread separada. Com Retry para não falhar no boot.
-    """
     print("[MS Lance] Conectando ao RabbitMQ...")
     connection = None
     channel = None
@@ -152,7 +132,6 @@ def iniciar_consumidor_rabbitmq():
         if connection and connection.is_open:
             connection.close()
 
-# --- Inicialização ---
 if __name__ == '__main__':
     thread_rabbitmq = threading.Thread(target=iniciar_consumidor_rabbitmq, daemon=True)
     thread_rabbitmq.start()

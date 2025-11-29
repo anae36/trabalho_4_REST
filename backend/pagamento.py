@@ -2,16 +2,14 @@ import pika, requests, json, threading, time
 from flask import Flask, request, jsonify 
 from flask_cors import CORS
 
-# --- Configuração do Flask ---
 app = Flask(__name__)
 CORS(app)
-# Rodaremos o MS Pagamento na porta 5003
 PORT = 5003
 
-# --- Configuração do RabbitMQ ---
 RABBITMQ_HOST = 'localhost'
 
-# --- 1. Funções de Publicação (Publisher) ---
+# Simulação do Sistema Externo de Pagamento
+URL_SISTEMA_EXTERNO = "http://payment-system.com/api/payments" 
 
 def publicar_evento(exchange_name, routing_key, payload):
     """ Função genérica para publicar um evento no RabbitMQ. """
@@ -19,7 +17,6 @@ def publicar_evento(exchange_name, routing_key, payload):
         connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
         channel = connection.channel()
         
-        # Garante que o exchange exista
         channel.exchange_declare(exchange=exchange_name, exchange_type='direct')
 
         message = json.dumps(payload)
@@ -36,22 +33,16 @@ def publicar_evento(exchange_name, routing_key, payload):
     except Exception as e:
         print(f"[MS Pagamento] ERRO ao publicar evento {routing_key}: {e}")
 
-# --- 2. Lógica de Consumo (Subscriber) ---
-
 def processar_leilao_vencedor(dados_vencedor):
-    """
-    (0,1) Consome o evento 'leilao_vencedor'.
-    (0,2) Faz a requisição REST e publica 'link_pagamento'.
-    """
+    
     id_leilao = dados_vencedor.get('id_leilao')
     id_vencedor = dados_vencedor.get('id_vencedor')
-    valor = dados_vencedor.get('valor') # Assume que o payload tem 'valor_final'
+    valor = dados_vencedor.get('valor') 
 
     print(f"[MS Pagamento] Processando vencedor do leilão {id_leilao} (Vencedor: {id_vencedor}, Valor: R$ {valor}).")
 
-    # --- Simulação de Requisição REST ao Sistema Externo ---
+    # Simulação de Requisição REST ao Sistema Externo
     try:
-        # Dados que seriam enviados ao sistema externo
         dados_pagamento = {
             "id_leilao": id_leilao,
             "id_cliente": id_vencedor,
@@ -61,20 +52,16 @@ def processar_leilao_vencedor(dados_vencedor):
             "webhook_url": f"http://localhost:{PORT}/webhook_status" 
         }
         
-        # Simulando a resposta do sistema externo
-        # ms_pagamento.py (NOVO - dentro da função processar_leilao_vencedor)
         # Aponta para o arquivo local simulando o sistema externo, passando os dados necessários
         link_pagamento = f"http://localhost:8000/checkout.html?leilaoId={id_leilao}&clienteId={id_vencedor}&valor={valor}"
         print(f"[MS Pagamento] Link de pagamento gerado: {link_pagamento}")
         
-        # --- Publicação do Evento 'link_pagamento' (0,2) ---
         payload_link = {
             "id_leilao": id_leilao,
             "id_usuario": id_vencedor,
             "link": link_pagamento
         }
         
-        # O Gateway ouvirá 'link_pagamento' para notificar o cliente via SSE
         publicar_evento(
             exchange_name='link_pagamento_exchange',
             routing_key='link_pagamento',
@@ -83,18 +70,13 @@ def processar_leilao_vencedor(dados_vencedor):
         
     except requests.exceptions.RequestException as e:
         print(f"[MS Pagamento] ERRO de comunicação com o sistema externo: {e}")
-        # Aqui, poderia publicar um evento de erro
-
-# --- 3. Consumidor RabbitMQ (Thread) ---
 
 def callback_leilao_vencedor(ch, method, properties, body):
-    """ Callback acionado ao receber um evento leilao_vencedor. """
     dados = json.loads(body.decode('utf-8'))
     processar_leilao_vencedor(dados)
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 def iniciar_consumidor_rabbitmq():
-    """ Configura e inicia o consumidor com Retry. """
     print("[MS Pagamento] Conectando ao RabbitMQ...")
     connection = None
     channel = None
@@ -109,7 +91,6 @@ def iniciar_consumidor_rabbitmq():
             print("[MS Pagamento] RabbitMQ indisponível. Tentando em 5s...")
             time.sleep(5)
 
-    # ... Configuração das filas (Indentado corretamente) ...
     channel.exchange_declare(exchange='leilao_vencedor_exchange', exchange_type='direct')
     q_vencedor = channel.queue_declare(queue='', exclusive=True)
     channel.queue_bind(exchange='leilao_vencedor_exchange', queue=q_vencedor.method.queue, routing_key='vencedor')
@@ -127,8 +108,7 @@ def iniciar_consumidor_rabbitmq():
         if connection and connection.is_open:
             connection.close()
 
-# --- 4. Endpoint Webhook (0,2) ---
-
+# Endpoint Webhook
 @app.route('/webhook_status', methods=['POST'])
 def webhook_status():
     """
@@ -140,15 +120,12 @@ def webhook_status():
         if not dados_webhook:
             return jsonify({"erro": "Nenhum dado recebido"}), 400
 
-        # --- Estrutura esperada do webhook simulado ---
-        # Ex: {"id_leilao": 1, "id_usuario": "ana", "status": "APROVADA"}
         id_leilao = dados_webhook.get('id_leilao')
         id_usuario = dados_webhook.get('id_usuario')
         status = dados_webhook.get('status')
         
         print(f"[MS Pagamento - Webhook] Recebido status '{status}' para o Leilão {id_leilao}, Cliente {id_usuario}.")
 
-        # --- Publicação do Evento 'status_pagamento' (0,2) ---
         payload_status = {
             "id_leilao": id_leilao,
             "id_usuario": id_usuario,
@@ -156,7 +133,6 @@ def webhook_status():
             "mensagem": f"Transação: {status}"
         }
 
-        # O Gateway ouvirá 'status_pagamento' para notificar o cliente via SSE
         publicar_evento(
             exchange_name='status_pagamento_exchange',
             routing_key='status_pagamento',
@@ -169,14 +145,10 @@ def webhook_status():
         print(f"[MS Pagamento - Webhook] ERRO ao processar webhook: {e}")
         return jsonify({"erro": str(e)}), 500
 
-# --- 5. Inicialização ---
-
 if __name__ == '__main__':
-    # 1. Inicia o consumidor RabbitMQ em uma thread daemon
     thread_rabbitmq = threading.Thread(target=iniciar_consumidor_rabbitmq, daemon=True)
     thread_rabbitmq.start()
     
-    # 2. Inicia o servidor Flask
+    # Inicia o servidor Flask
     print(f"[MS Pagamento] Servidor Flask iniciado na porta {PORT}.")
     app.run(port=PORT, debug=False, threaded=True)
-

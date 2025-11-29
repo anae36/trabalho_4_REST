@@ -1,25 +1,17 @@
 
 services:
-  # ------------------------------------------------------------
-  # REDIS (Banco de dados para o SSE)
-  # O código Python no VS Code vai acessar via localhost:6379
-  # ------------------------------------------------------------
   redis:
     image: "redis:latest"
     container_name: redis
     ports:
-      - "6379:6379" # Mapeia a porta do container para o seu PC
+      - "6379:6379" 
 
-  # ------------------------------------------------------------
-  # RABBITMQ (Mensageria)
-  # O código Python no VS Code vai acessar via localhost:5672
-  # ------------------------------------------------------------
   rabbitmq:
-    image: "rabbitmq:3-management" # Versão com painel visual
+    image: "rabbitmq:3-management"
     container_name: rabbitmq
     ports:
-      - "5672:5672"   # Porta de conexão (protocolo AMQP usado pelo pika)
-      - "15672:15672" # Porta do painel administrativo (acesse no navegador)
+      - "5672:5672"
+      - "15672:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s

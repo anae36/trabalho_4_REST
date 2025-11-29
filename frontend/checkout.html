@@ -38,7 +38,7 @@
     <script>
         const MS_PAGAMENTO_URL = 'http://localhost:5003';
 
-        // --- 1. Extrair Dados da URL ---
+        // Extrair Dados da URL
         // Ex: checkout.html?leilaoId=1&clienteId=ana&valor=30.0
         const urlParams = new URLSearchParams(window.location.search);
         const leilaoId = urlParams.get('leilaoId');
@@ -50,7 +50,7 @@
         document.getElementById('clienteId').textContent = clienteId || 'N/A';
         document.getElementById('valor').textContent = `R$ ${valor || 'N/A'}`;
 
-        // --- 2. Função para Enviar o Webhook ---
+        // Função para Enviar o Webhook
         async function enviarWebhook(status) {
             if (!leilaoId || !clienteId) {
                 document.getElementById('message').textContent = 'Erro: Faltam IDs na URL.';
@@ -60,14 +60,14 @@
             const dadosWebhook = {
                 id_leilao: parseInt(leilaoId),
                 id_usuario: clienteId,
-                status: status, // "APROVADA" ou "RECUSADA"
+                status: status,
                 valor: parseFloat(valor) 
             };
             
             document.getElementById('message').textContent = `Enviando status: ${status}...`;
 
             try {
-                // Envia o Webhook (POST) para o endpoint configurado no seu MS Pagamento
+                // Envia o Webhook (POST) para o endpoint configurado no MS Pagamento
                 const response = await axios.post(`${MS_PAGAMENTO_URL}/webhook_status`, dadosWebhook);
                 
                 console.log("Webhook Enviado com sucesso:", response.data);
@@ -83,7 +83,7 @@
             }
         }
 
-        // --- 3. Atribuir Eventos aos Botões ---
+        // Atribuir Eventos aos Botões
         document.getElementById('btnAprovar').onclick = () => enviarWebhook('APROVADA');
         document.getElementById('btnRecusar').onclick = () => enviarWebhook('RECUSADA');
     </script>

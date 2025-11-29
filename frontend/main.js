@@ -1,12 +1,11 @@
-// Importa apenas as funções que você exportou do api.js
+// Importa as funções do api.js
 import { cancelarInteresse, consultarLeiloes, criarLeilao, efetuarLance, registrarInteresse } from './api.js';
 
-// --- 1. Configurações Globais ---
 const URL_BASE = 'http://localhost:3000';
 let clienteId = null;
 let sseConnection = null;
 
-// --- 2. Referências aos elementos do HTML ---
+// Referências aos botões
 const logNotificacoes = document.getElementById('notificacoes');
 const btnConectar = document.getElementById('btnConectar');
 const btnCriarLeilao = document.getElementById('btnCriarLeilao');
@@ -17,16 +16,12 @@ const btnConsultar = document.getElementById('btnConsultar');
 const inputClienteId = document.getElementById('clienteId');
 const inputLeilaoIdInteracao = document.getElementById('leilaoIdInteracao');
 
-// --- 3. Funções Auxiliares ---
 function log(origem, mensagem) {
     console.log(origem, mensagem);
     const p = document.createElement('p');
     p.innerHTML = `<strong>[${origem}]:</strong> ${JSON.stringify(mensagem)}`;
     logNotificacoes.prepend(p);
 }
-
-// Conectar ao SSE
-// --- 4. Lógica de Eventos ---
 
 // Conectar ao SSE
 btnConectar.onclick = function() {
@@ -51,7 +46,7 @@ btnConectar.onclick = function() {
         alert(`Parabéns! Você venceu o leilão ${dados.id_leilao}. Link: ${dados.link}`);
     });
     
-    // Recebe a atualização do status do pagamento (após o webhook do MS Pagamento).
+    // Recebe a atualização do status do pagamento.
     sseConnection.addEventListener('status_pagamento', (e) => {
         const dados = JSON.parse(e.data);
         log('SSE: ✅ STATUS PAGAMENTO', dados);
@@ -64,7 +59,7 @@ btnCriarLeilao.onclick = async function() {
     const dados = {
         produto: document.getElementById('leilaoProduto').value,
         descricao: "Descrição...",
-        valor_inicial: 1.0, // (Pode adicionar os inputs depois)
+        valor_inicial: 1.0, 
         hora_inicio: new Date(document.getElementById('leilaoInicio').value).toISOString(),
         hora_fim: new Date(document.getElementById('leilaoFim').value).toISOString(),
     };
@@ -88,18 +83,15 @@ btnDarLance.onclick = async function() {
 
     log('API (Lance)', { leilaoId, valor });
    try {
-        // 1. Tenta efetuar o lance
         const resultado = await efetuarLance(leilaoId, clienteId, valor);
         log('API (Sucesso Lance)', resultado);
         
-        // 2. Se o lance deu certo (não caiu no catch), registra o interesse automaticamente
         await registrarInteresse(leilaoId, clienteId);
         log('API (Auto-Registro)', `Interesse registrado automaticamente para o leilão ${leilaoId}`);
         
         alert('Lance efetuado e interesse registrado!');
         
     } catch (err) {
-        // Se o lance falhar (ex: valor baixo), não registramos interesse
         log('API (Erro Lance)', err.message);
     }
 };

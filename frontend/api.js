@@ -1,5 +1,4 @@
 //Consome  O API GATEWAY.
-// O Axios já foi carregado no HTML, então ele existe globalmente.
 const URL_BASE = 'http://localhost:3000';
 
 export async function consultarLeiloes() {
@@ -8,7 +7,7 @@ export async function consultarLeiloes() {
     return response.data;
   } catch (error) {
     console.error('Erro ao obter leiloes:', error);
-    throw error; // Lança o erro para o main.js pegar
+    throw error;
   }
 }
 
@@ -24,7 +23,6 @@ export async function criarLeilao(dadosLeilao) {
 
 export async function efetuarLance(id_leilao, id_usuario, valor) {
   try {
-    // A função agora passa o id_usuario, como o gateway espera
     const response = await axios.post(`${URL_BASE}/lances`, { id_leilao, id_usuario, valor });
     return response.data;
   } catch (error) {
@@ -35,7 +33,6 @@ export async function efetuarLance(id_leilao, id_usuario, valor) {
 
 export async function registrarInteresse(id_leilao, id_usuario) {
   try {
-    // A função agora passa o id_usuario, como o gateway espera
     const response = await axios.post(`${URL_BASE}/notificacoes/${id_leilao}`, { id_usuario });
     return response.data;
   } catch (error) {
